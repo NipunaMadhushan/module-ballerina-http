@@ -30,7 +30,7 @@ import static io.ballerina.runtime.api.constants.RuntimeConstants.ORG_NAME_SEPAR
  *
  * @since 0.8.0
  */
-public class HttpConstants {
+public final class HttpConstants {
 
     public static final String HTTPS_ENDPOINT_STARTED = "[ballerina/http] started HTTPS/WSS listener ";
     public static final String HTTP_ENDPOINT_STARTED = "[ballerina/http] started HTTP/WS listener ";
@@ -238,6 +238,7 @@ public class HttpConstants {
     public static final int NO_CONTENT_LENGTH_FOUND = -1;
     public static final short ONE_BYTE = 1;
     public static final String HTTP_HEADERS = "http_headers";
+    public static final String SET_HOST_HEADER = "set_host_header";
     public static final String HTTP_TRAILER_HEADERS = "http_trailer_headers";
     public static final String LEADING_HEADER = "leading";
     public static final BString HEADER_REQUEST_FIELD = StringUtils.fromString("request");
@@ -257,8 +258,6 @@ public class HttpConstants {
     public static final String HTTP_ERROR_RECORD = "HTTPError";
     public static final BString HTTP_ERROR_MESSAGE = StringUtils.fromString("message");
     public static final BString HTTP_ERROR_STATUS_CODE = StringUtils.fromString("statusCode");
-    public static final String HTTP_CLIENT_REQUEST_ERROR = "ClientRequestError";
-    public static final String HTTP_REMOTE_SERVER_ERROR = "RemoteServerError";
 
     // ServeConnector struct indices
     public static final BString HTTP_CONNECTOR_CONFIG_FIELD = StringUtils.fromString("config");
@@ -295,6 +294,10 @@ public class HttpConstants {
     //StatusCodeResponse struct field names
     public static final String STATUS_CODE_RESPONSE_BODY_FIELD = "body";
     public static final String STATUS_CODE_RESPONSE_STATUS_FIELD = "status";
+    public static final String STATUS_CODE_RESPONSE_STATUS_CODE_FIELD = "code";
+    public static final String STATUS_CODE = "statusCode";
+    public static final String STATUS_CODE_RESPONSE_MEDIA_TYPE_FIELD = "mediaType";
+    public static final String STATUS_CODE_RESPONSE_HEADERS_FIELD = "headers";
 
     //PushPromise struct field names
     public static final BString PUSH_PROMISE_PATH_FIELD = StringUtils.fromString("path");
@@ -382,6 +385,7 @@ public class HttpConstants {
     public static final String REQUEST_INTERCEPTOR_INDEX = "REQUEST_INTERCEPTOR_INDEX";
     public static final String RESPONSE_INTERCEPTOR_INDEX = "RESPONSE_INTERCEPTOR_INDEX";
     public static final String INTERCEPTOR_SERVICE_ERROR = "INTERCEPTOR_SERVICE_ERROR";
+    public static final String INTERNAL_ERROR = "INTERNAL_ERROR";
     public static final String WAIT_FOR_FULL_REQUEST = "WAIT_FOR_FULL_REQUEST";
     public static final String HTTP_NORMAL = "Normal";
     public static final String REQUEST_INTERCEPTOR = "RequestInterceptor";
@@ -506,6 +510,14 @@ public class HttpConstants {
     public static final BString CONNECTION_POOLING_WAIT_TIME = StringUtils.fromString("waitTime");
     public static final BString CONNECTION_POOLING_MAX_ACTIVE_STREAMS_PER_CONNECTION = StringUtils.fromString(
             "maxActiveStreamsPerConnection");
+    public static final BString CONNECTION_POOLING_EVICTABLE_IDLE_TIME = StringUtils.fromString(
+            "minEvictableIdleTime");
+    public static final BString CONNECTION_POOLING_TIME_BETWEEN_EVICTION_RUNS = StringUtils.fromString(
+            "timeBetweenEvictionRuns");
+    public static final BString CONNECTION_POOLING_IDLE_TIME_STALE_STATE = StringUtils.fromString(
+            "minIdleTimeInStaleState");
+    public static final BString CONNECTION_POOLING_TIME_BETWEEN_STALE_CHECK_RUNS = StringUtils.fromString(
+            "timeBetweenStaleEviction");
     public static final String HTTP_CLIENT_CONNECTION_POOL = "PoolConfiguration";
     public static final String CONNECTION_MANAGER = "ConnectionManager";
     public static final int POOL_CONFIG_INDEX = 1;

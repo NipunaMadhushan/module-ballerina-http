@@ -5,6 +5,78 @@ This file contains all the notable changes done to the Ballerina HTTP package th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to 
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- [Add status code response binding support for the HTTP client](https://github.com/ballerina-platform/ballerina-library/issues/6100)
+
+### Fixed
+
+- [Address CVE-2024-29025 netty's vulnerability](https://github.com/ballerina-platform/ballerina-library/issues/6242)
+- [Fix interceptor pipeline getting exited when there is a `nil` return](https://github.com/ballerina-platform/ballerina-library/issues/6278)
+
+## [2.10.12] - 2024-03-21
+
+### Fixed
+
+- [Fix the inconsistency in overwriting identical cookies](https://github.com/ballerina-platform/ballerina-library/issues/6194)
+
+## [2.10.11] - 2024-03-13
+
+### Changed
+
+- [Update Host header only when a value is intentionally provided](https://github.com/ballerina-platform/ballerina-library/issues/6149)
+
+## [2.10.8] - 2024-03-05
+
+### Added
+
+- [Make the `Host` header overridable](https://github.com/ballerina-platform/ballerina-library/issues/6133)
+
+## [2.10.7] - 2024-02-14
+
+### Fixed
+- [Fix connection getting closed by stale eviction task after it has been closed by the server](https://github.com/ballerina-platform/ballerina-library/issues/6050)
+
+## Unreleased
+
+### Added
+
+- [Supporting X25519Kyber768 key encapsulation for TLS 1.3](https://github.com/ballerina-platform/ballerina-library/issues/6200)
+
+## [2.10.6] - 2024-02-01
+
+### Added
+- [Expose HTTP connection eviction configurations in the client level](https://github.com/ballerina-platform/ballerina-library/issues/5951)
+- [Handle GO_AWAY received HTTP/2 clients gracefully](https://github.com/ballerina-platform/ballerina-library/issues/4806)
+
+### Fixed
+- [Remove unused import from Http2StateUtil](https://github.com/ballerina-platform/ballerina-library/issues/5966)
+- [Fix client getting hanged when server closes connection in the ALPN handshake](https://github.com/ballerina-platform/ballerina-library/issues/6003)
+- [Fix client getting hanged when multiple requests are sent which exceed `maxHeaderSize`](https://github.com/ballerina-platform/ballerina-library/issues/6000)
+- [Fix inconsistencies with error logging](https://github.com/ballerina-platform/ballerina-library/issues/5877)
+
+## [2.10.5] - 2023-12-06
+
+### Fixed
+- [Fix `IndexOutOfBoundsException` when decoding jwt header](https://github.com/ballerina-platform/ballerina-library/issues/5856)
+- [Fix HTTP/2 upgrade client hanging when server closes the connection abruptly](https://github.com/ballerina-platform/ballerina-library/issues/5955)
+
+## [2.10.4] - 2023-11-17
+
+### Fixed
+- [Fix URL encoded form data binding with encoded `&` and `=` characters](https://github.com/ballerina-platform/ballerina-standard-library/issues/5068)
+- [Fix client not honouring server-initiated connection closures](https://github.com/ballerina-platform/ballerina-library/issues/5793)
+
+### Changed
+- [Make some of the Java classes proper utility classes](https://github.com/ballerina-platform/ballerina-standard-library/issues/4923)
+
+## [2.10.3] - 2023-10-13
+
+### Fixed
+- [Address CVE-2023-4586 netty Vulnerability](https://github.com/ballerina-platform/ballerina-standard-library/issues/4908)
+
 ## [2.10.2] - 2023-10-09
 
 ### Fixed

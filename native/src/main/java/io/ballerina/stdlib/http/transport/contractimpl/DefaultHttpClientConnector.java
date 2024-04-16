@@ -183,7 +183,7 @@ public class DefaultHttpClientConnector implements HttpClientConnector {
                                                    this.configHashCode);
             if (http2) {
                 // See whether an already upgraded HTTP/2 connection is available
-                Http2ClientChannel activeHttp2ClientChannel = http2ConnectionManager.borrowChannel(route);
+                Http2ClientChannel activeHttp2ClientChannel = http2ConnectionManager.fetchChannel(route);
 
                 if (activeHttp2ClientChannel != null) {
                     outboundMsgHolder.setHttp2ClientChannel(activeHttp2ClientChannel);
@@ -208,7 +208,7 @@ public class DefaultHttpClientConnector implements HttpClientConnector {
                 public void onSuccess(String protocol, ChannelFuture channelFuture) {
                     if (LOG.isDebugEnabled()) {
                         LOG.debug("Created the connection to address: {}",
-                                  route.toString() + " " + "Original Channel ID is : " + channelFuture.channel().id());
+                                  route + " Original Channel ID is : " + channelFuture.channel().id());
                     }
 
                     if (isH1c(protocol)) {

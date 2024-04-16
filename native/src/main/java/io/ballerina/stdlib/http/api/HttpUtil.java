@@ -205,6 +205,9 @@ public class HttpUtil {
     private static final String IO_EXCEPTION_OCCURRED = "I/O exception occurred";
     private static final String CHUNKING_CONFIG = "chunking_config";
     private static final String ILLEGAL_FUNCTION_INVOKED = "illegal respond: response has already been sent";
+    private static final String JAVA_CONFIG_TLS_NAMED_GROUPS = "jdk.tls.namedGroups";
+    private static final String[] DEFAULT_NAMED_GROUPS = { "X25519Kyber768Draft00", "x25519", "secp256r1",
+            "secp384r1", "secp521r1" };
 
     /**
      * Set new entity to in/out request/response struct.
@@ -493,12 +496,10 @@ public class HttpUtil {
         PipeliningHandler.sendPipelinedResponse(requestMessage, createErrorMessage(errorMsg, statusCode));
     }
 
-    public static void handleFailure(HttpCarbonMessage requestMessage, BError error, Boolean printStackTrace) {
+    public static void handleFailure(HttpCarbonMessage requestMessage, BError error) {
         String errorMsg = getErrorMessage(error);
         int statusCode = getStatusCode(requestMessage, errorMsg);
-        if (printStackTrace) {
-            error.printStackTrace();
-        }
+        error.printStackTrace();
         PipeliningHandler.sendPipelinedResponse(requestMessage, createErrorMessage(errorMsg, statusCode));
     }
 
@@ -1352,6 +1353,28 @@ public class HttpUtil {
                 maxActiveStreamsPerConnection == -1 ? Integer.MAX_VALUE : validateConfig(
                         maxActiveStreamsPerConnection,
                         HttpConstants.CONNECTION_POOLING_MAX_ACTIVE_STREAMS_PER_CONNECTION.getValue()));
+
+        double minEvictableIdleTime =
+                ((BDecimal) poolRecord.get(HttpConstants.CONNECTION_POOLING_EVICTABLE_IDLE_TIME)).floatValue();
+        poolConfiguration.setMinEvictableIdleTime(minEvictableIdleTime < 0 ? 0 : (long) minEvictableIdleTime * 1000);
+
+        double timeBetweenEvictionRuns =
+                ((BDecimal) poolRecord.get(HttpConstants.CONNECTION_POOLING_TIME_BETWEEN_EVICTION_RUNS)).floatValue();
+        if (timeBetweenEvictionRuns > 0) {
+            poolConfiguration.setTimeBetweenEvictionRuns((long) timeBetweenEvictionRuns * 1000);
+        }
+
+        double minIdleTimeInStaleState =
+                ((BDecimal) poolRecord.get(HttpConstants.CONNECTION_POOLING_IDLE_TIME_STALE_STATE)).floatValue();
+        poolConfiguration.setMinIdleTimeInStaleState(minIdleTimeInStaleState < -1 ? -1 :
+                (long) minEvictableIdleTime * 1000);
+
+        double timeBetweenStaleEviction =
+                ((BDecimal) poolRecord.get(HttpConstants.CONNECTION_POOLING_TIME_BETWEEN_STALE_CHECK_RUNS))
+                        .floatValue();
+        if (timeBetweenStaleEviction > 0) {
+            poolConfiguration.setTimeBetweenStaleEviction((long) timeBetweenStaleEviction * 1000);
+        }
     }
 
     private static int validateConfig(long value, String configName) {
@@ -1824,6 +1847,9 @@ public class HttpUtil {
         String sslProtocol = protocol.getStringValue(HttpConstants.SECURESOCKET_CONFIG_PROTOCOL_NAME).getValue();
         if (!sslProtocol.isBlank()) {
             sslConfiguration.setSSLProtocol(sslProtocol);
+        }
+        if (System.getProperty(JAVA_CONFIG_TLS_NAMED_GROUPS) == null) {
+            System.setProperty(JAVA_CONFIG_TLS_NAMED_GROUPS, String.join(",", DEFAULT_NAMED_GROUPS));
         }
     }
 
