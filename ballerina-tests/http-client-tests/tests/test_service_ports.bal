@@ -40,3 +40,14 @@ const int passthroughHostTestPort2 = 9608;
 
 const int statusCodeBindingPort1 = 9609;
 const int statusCodeBindingPort2 = 9610;
+
+const int resBindingAdvancedPort = 9611;
+
+const int http11_https_port = 9622;
+const int http11_http_port = 9623;
+
+const int http11_https_passthrough_port = 9626;
+const int http11_http_passthrough_port = 9627;
+
+const int backend_http11_https_port = 9630;
+const int backend_http11_http_port = 9632;

@@ -21,6 +21,17 @@ import ballerina/crypto;
 import ballerina/time;
 import ballerina/jballerina.java;
 import ballerina/log;
+import ballerina/data.jsondata;
+
+# Defines a status code response record type
+public type StatusCodeRecord record {|
+    # The status code
+    int status;
+    # The headers of the response
+    map<string|int|boolean|string[]|int[]|boolean[]> headers?;
+    # The response body
+    anydata body?;
+|};
 
 # Represents an HTTP response.
 #
@@ -42,7 +53,7 @@ public class Response {
     time:Utc receivedTime = [0, 0.0];
     time:Utc requestTime = [0, 0.0];
     private mime:Entity? entity = ();
-
+    
     public isolated function init() {
         self.entity = self.createNewEntity();
     }
@@ -109,13 +120,18 @@ public class Response {
         return externResponseGetHeader(self, headerName, position);
     }
 
-    # Adds the specified header to the response. Existing header values are not replaced. Panic if an illegal header is passed.
+    # Adds the specified header to the response. Existing header values are not replaced, except for the `Content-Type`
+    # header. In the case of the `Content-Type` header, the existing value is replaced with the specified value.
+    #. Panic if an illegal header is passed.
     #
     # + headerName - The header name
     # + headerValue - The header value
     # + position - Represents the position of the header as an optional parameter. If the position is `http:TRAILING`,
     #              the entity-body of the `Response` must be accessed initially.
     public isolated function addHeader(string headerName, string headerValue, HeaderPosition position = LEADING) {
+        if headerName.equalsIgnoreCaseAscii(CONTENT_TYPE) {
+            return externResponseSetHeader(self, headerName, headerValue, position);
+        }
         return externResponseAddHeader(self, headerName, headerValue, position);
     }
 
@@ -324,6 +340,13 @@ public class Response {
         }
     }
 
+    # Gets the response payload as a `stream` of SseEvent.
+    #
+    # + return - A SseEvent stream from which the `http:SseEvent` can be read or `http:ClientError` in case of errors
+    public isolated function getSseEventStream() returns stream<SseEvent, error?>|ClientError {
+        return getSseEventStream(self);
+    }
+
     # Extracts body parts from the response. If the content type is not a composite media type, an error is returned.
     #
     # + return - The body parts as an array of entities or else an `http:ClientError` if there were any errors in
@@ -374,7 +397,20 @@ public class Response {
     #                 The `application/json` is the default value
     public isolated function setJsonPayload(json payload, string? contentType = ()) {
         mime:Entity entity = self.getEntityWithoutBodyAndHeaders();
-        setJson(entity, payload, self.getContentType(), contentType);
+        setJson(entity, jsondata:toJson(payload), self.getContentType(), contentType);
+        self.setEntityAndUpdateContentTypeHeader(entity);
+    }
+
+    # Sets a `anydata` payaload, as a `json` payload. If the content-type header is not set then this method set content-type
+    # headers with the default content-type, which is `application/json`. Any existing content-type can be
+    # overridden by passing the content-type as an optional parameter.
+    #
+    # + payload - The `json` payload
+    # + contentType - The content type of the payload. This is an optional parameter.
+    #                 The `application/json` is the default value
+    public isolated function setAnydataAsJsonPayload(anydata payload, string? contentType = ()) {
+        mime:Entity entity = self.getEntityWithoutBodyAndHeaders();
+        setJson(entity, jsondata:toJson(payload), self.getContentType(), contentType);
         self.setEntityAndUpdateContentTypeHeader(entity);
     }
 
@@ -468,14 +504,29 @@ public class Response {
         self.setEntityAndUpdateContentTypeHeader(entity);
     }
 
+    # Sets an `http:SseEvent` stream as the payload, along with the Content-Type and Cache-Control 
+    # headers set to 'text/event-stream' and 'no-cache', respectively.
+    #
+    # + eventStream - SseEvent stream, which needs to be set to the response
+    public isolated function setSseEventStream(stream<SseEvent, error?>|stream<SseEvent, error> eventStream) {
+        ResponseCacheControl cacheControl = new;
+        cacheControl.noCache = true;
+        self.cacheControl = cacheControl;
+        SseEventToByteStreamGenerator byteStreamGen = new(eventStream);
+        self.setByteStream(new (byteStreamGen), mime:TEXT_EVENT_STREAM);
+    }
+    
     # Sets the response payload. This method overrides any existing content-type by passing the content-type
     # as an optional parameter. If the content type parameter is not provided then the default value derived
-    # from the payload will be used as content-type only when there are no existing content-type header.
+    # from the payload will be used as content-type only when there are no existing content-type header. If
+    # the payload is non-json typed value then the value is converted to json using the `toJson` method.
     #
-    # + payload - Payload can be of type `string`, `xml`, `json`, `byte[]`, `stream<byte[], io:Error?>`
-    #             or `Entity[]` (i.e., a set of body parts).
+    # + payload - Payload can be of type `string`, `xml`, `byte[]`, `json`, `stream<byte[], io:Error?>`,
+    #             stream<SseEvent, error?>(represents Server-Sent events), `Entity[]` (i.e., a set of body
+    #             parts) or any other value of type `anydata` which will be converted to `json` using the
+    #             `toJson` method.
     # + contentType - Content-type to be used with the payload. This is an optional parameter
-    public isolated function setPayload(string|xml|json|byte[]|mime:Entity[]|stream<byte[], io:Error?> payload,
+    public isolated function setPayload(anydata|mime:Entity[]|stream<byte[], io:Error?>|stream<SseEvent, error?> payload,
             string? contentType = ()) {
         if contentType is string {
             error? err = self.setContentType(contentType);
@@ -496,6 +547,10 @@ public class Response {
             self.setByteStream(payload);
         } else if payload is mime:Entity[] {
             self.setBodyParts(payload);
+        } else if payload is stream<SseEvent, error?> {
+            self.setSseEventStream(payload);
+        } else if payload is anydata {
+            self.setAnydataAsJsonPayload(payload);
         } else {
             panic error Error("invalid entity body type." +
                 "expected one of the types: string|xml|json|byte[]|mime:Entity[]|stream<byte[],io:Error?>");
@@ -540,13 +595,25 @@ public class Response {
         return cookiesInResponse;
     }
 
+    # Gets the status code response record from the response.
+    #
+    # + return - The status code response record
+    public isolated function getStatusCodeRecord() returns StatusCodeRecord|error {
+        StatusCodeResponse res = check externProcessResponseNew(self, StatusCodeResponse, false, false);
+        return {
+            status: res.status.code,
+            headers: res.headers,
+            body: res?.body
+        };
+    }
+
     isolated function buildStatusCodeResponse(typedesc<anydata>? payloadType, typedesc<StatusCodeResponse> statusCodeResType,
-        boolean requireValidation, Status status, map<string|int|boolean|string[]|int[]|boolean[]> headers, string? mediaType)
-            returns StatusCodeResponse|ClientError {
+        boolean requireValidation, boolean requireLaxDataBinding, Status status, map<string|int|boolean|string[]|int[]|boolean[]> headers, string? mediaType,
+        boolean fromDefaultStatusCodeMapping) returns StatusCodeResponse|ClientError {
         if payloadType !is () {
-            anydata|ClientError payload = self.performDataBinding(payloadType, requireValidation);
+            anydata|ClientError payload = self.performDataBinding(payloadType, requireValidation, requireLaxDataBinding);
             if payload is ClientError {
-                return payload;
+                return self.getStatusCodeResponseDataBindingError(payload.message(), fromDefaultStatusCodeMapping, PAYLOAD, payload);
             }
             return externBuildStatusCodeResponse(statusCodeResType, status, headers, payload, mediaType);
         } else {
@@ -554,26 +621,42 @@ public class Response {
         }
     }
 
-    isolated function performDataBinding(typedesc<anydata> targetType, boolean requireValidation) returns anydata|ClientError {
-        anydata payload = check performDataBinding(self, targetType);
+    isolated function performDataBinding(typedesc<anydata> targetType, boolean requireValidation, boolean requireLaxDataBinding) returns anydata|ClientError {
+        anydata payload = check performDataBinding(self, targetType, requireLaxDataBinding);
         if requireValidation {
             return performDataValidation(payload, targetType);
         }
         return payload;
     }
 
-    isolated function getStatusCodeResponseBindingError(string reasonPhrase, boolean generalError) returns ClientError {
+    isolated function getStatusCodeResponseBindingError(string reasonPhrase) returns ClientError {
         map<string[]> headers = getHeaders(self);
         anydata|error payload = getPayload(self);
         int statusCode = self.statusCode;
         if payload is error {
             if payload is NoContentError {
-                return createStatusCodeResponseBindingError(generalError, statusCode, reasonPhrase, headers);
+                return createStatusCodeResponseBindingError(statusCode, reasonPhrase, headers);
             }
             return error PayloadBindingClientError("http:StatusCodeBindingError creation failed: " + statusCode.toString() +
                 " response payload extraction failed", payload);
         } else {
-            return createStatusCodeResponseBindingError(generalError, statusCode, reasonPhrase, headers, payload);
+            return createStatusCodeResponseBindingError(statusCode, reasonPhrase, headers, payload);
+        }
+    }
+
+    isolated function getStatusCodeResponseDataBindingError(string reasonPhrase, boolean fromDefaultStatusCodeMapping,
+        DataBindingErrorType errorType, error? cause) returns ClientError {
+        map<string[]> headers = getHeaders(self);
+        anydata|error payload = getPayload(self);
+        int statusCode = self.statusCode;
+        if payload is error {
+            if payload is NoContentError {
+                return createStatusCodeResponseDataBindingError(errorType, fromDefaultStatusCodeMapping, statusCode, reasonPhrase, headers, cause = cause);
+            }
+            return error PayloadBindingClientError("http:StatusCodeBindingError creation failed: " + statusCode.toString() +
+                " response payload extraction failed", payload);
+        } else {
+            return createStatusCodeResponseDataBindingError(errorType, fromDefaultStatusCodeMapping, statusCode, reasonPhrase, headers, payload, cause);
         }
     }
 }

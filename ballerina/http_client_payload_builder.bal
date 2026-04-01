@@ -14,9 +14,10 @@
 // specific language governing permissions and limitations
 // under the License.
 
-import ballerina/log;
-import ballerina/jballerina.java;
 import ballerina/constraint;
+import ballerina/data.jsondata;
+import ballerina/jballerina.java;
+import ballerina/log;
 
 type nilType typedesc<()>;
 type xmlType typedesc<xml>;
@@ -24,10 +25,10 @@ type stringType typedesc<string>;
 type byteArrType typedesc<byte[]>;
 type mapStringType typedesc<map<string>>;
 
-isolated function performDataBinding(Response response, TargetType targetType) returns anydata|ClientError {
+isolated function performDataBinding(Response response, TargetType targetType, boolean requireLaxDataBinding) returns anydata|ClientError {
     string contentType = response.getContentType().trim();
     if contentType == "" {
-        return getBuilderFromType(response, targetType);
+        return getBuilderFromType(response, targetType, requireLaxDataBinding);
     }
     if XML_PATTERN.isFullMatch(contentType) {
         return xmlPayloadBuilder(response, targetType);
@@ -38,13 +39,13 @@ isolated function performDataBinding(Response response, TargetType targetType) r
     } else if OCTET_STREAM_PATTERN.isFullMatch(contentType) {
         return blobPayloadBuilder(response, targetType);
     } else if JSON_PATTERN.isFullMatch(contentType) {
-        return jsonPayloadBuilder(response, targetType);
+        return jsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else {
-        return getBuilderFromType(response, targetType);
+        return getBuilderFromType(response, targetType, requireLaxDataBinding);
     }
 }
 
-isolated function getBuilderFromType(Response response, TargetType targetType) returns anydata|ClientError {
+isolated function getBuilderFromType(Response response, TargetType targetType, boolean requireLaxDataBinding) returns anydata|ClientError {
     if targetType is typedesc<string> {
         return response.getTextPayload();
     } else if targetType is typedesc<string?> {
@@ -66,16 +67,16 @@ isolated function getBuilderFromType(Response response, TargetType targetType) r
     } else {
         // Due to the limitation of https://github.com/ballerina-platform/ballerina-spec/issues/1090
         // all the other types including union are considered as json subtypes.
-        return jsonPayloadBuilder(response, targetType);
+        return jsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     }
 }
 
 isolated function xmlPayloadBuilder(Response response, TargetType targetType) returns xml|ClientError? {
     if targetType is typedesc<xml> {
         return response.getXmlPayload();
-    } else if typeIncludedInUnion(targetType, xmlType) {
+    } else if matchingType(targetType, xmlType) {
         xml|ClientError payload = response.getXmlPayload();
-        return payload is NoContentError ? (typeIncludedInUnion(targetType, nilType) ? () : payload) : payload;
+        return payload is NoContentError ? (matchingType(targetType, nilType) ? () : payload) : payload;
     } else {
         return getCommonError(response, targetType);
     }
@@ -84,21 +85,21 @@ isolated function xmlPayloadBuilder(Response response, TargetType targetType) re
 isolated function textPayloadBuilder(Response response, TargetType targetType) returns string|byte[]|ClientError? {
     if targetType is typedesc<string> {
         return response.getTextPayload();
-    } else if typeIncludedInUnion(targetType, stringType) {
+    } else if matchingType(targetType, string) {
         string|ClientError payload = response.getTextPayload();
-        return payload is NoContentError ? (typeIncludedInUnion(targetType, nilType) ? () : payload) : payload;
+        return payload is NoContentError ? (matchingType(targetType, nilType) ? () : payload) : payload;
     } else if targetType is typedesc<byte[]> {
         return response.getBinaryPayload();
-    } else if typeIncludedInUnion(targetType, byteArrType) {
+    } else if matchingType(targetType, byteArrType) {
         string|ClientError payload = response.getTextPayload();
         if payload is string {
             return payload.toBytes();
         } else if payload is NoContentError {
-            return typeIncludedInUnion(targetType, nilType) ? () : payload;
+            return matchingType(targetType, nilType) ? () : payload;
         }
         return payload;
     } else {
-         return getCommonError(response, targetType);
+        return getCommonError(response, targetType);
     }
 }
 
@@ -106,15 +107,15 @@ isolated function formPayloadBuilder(Response response, TargetType targetType) r
     if targetType is typedesc<map<string>> {
         string payload = check response.getTextPayload();
         return getFormDataMap(payload);
-    } else if typeIncludedInUnion(targetType, mapStringType) {
+    } else if matchingType(targetType, mapStringType) {
         string|ClientError payload = response.getTextPayload();
-        return payload is NoContentError ? (typeIncludedInUnion(targetType, nilType) ? () : payload) :
+        return payload is NoContentError ? (matchingType(targetType, nilType) ? () : payload) :
             getFormDataMap(check payload);
     } else if targetType is typedesc<string> {
         return response.getTextPayload();
-    } else if typeIncludedInUnion(targetType, stringType) {
+    } else if matchingType(targetType, stringType) {
         string|ClientError payload = response.getTextPayload();
-        return payload is NoContentError ? (typeIncludedInUnion(targetType, nilType) ? () : payload) : payload;
+        return payload is NoContentError ? (matchingType(targetType, nilType) ? () : payload) : payload;
     } else {
         return getCommonError(response, targetType);
     }
@@ -123,10 +124,10 @@ isolated function formPayloadBuilder(Response response, TargetType targetType) r
 isolated function blobPayloadBuilder(Response response, TargetType targetType) returns byte[]|ClientError? {
     if targetType is typedesc<byte[]> {
         return response.getBinaryPayload();
-    } else if typeIncludedInUnion(targetType, byteArrType) {
+    } else if matchingType(targetType, byteArrType) {
         byte[]|ClientError payload = response.getBinaryPayload();
         if payload is byte[] && payload.length() == 0 {
-            return typeIncludedInUnion(targetType, nilType) ? () : payload;
+            return matchingType(targetType, nilType) ? () : payload;
         }
         return payload;
     } else {
@@ -134,20 +135,20 @@ isolated function blobPayloadBuilder(Response response, TargetType targetType) r
     }
 }
 
-isolated function jsonPayloadBuilder(Response response, TargetType targetType) returns anydata|ClientError {
+isolated function jsonPayloadBuilder(Response response, TargetType targetType, boolean requireLaxDataBinding) returns anydata|ClientError {
     if targetType is typedesc<record {| anydata...; |}> {
-        return nonNilablejsonPayloadBuilder(response, targetType);
+        return nonNilablejsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else if targetType is typedesc<record {| anydata...; |}?> {
-        return nilablejsonPayloadBuilder(response, targetType);
+        return nilablejsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else if targetType is typedesc<record {| anydata...; |}[]> {
-        return nonNilablejsonPayloadBuilder(response, targetType);
+        return nonNilablejsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else if targetType is typedesc<record {| anydata...; |}[]?> {
-        return nilablejsonPayloadBuilder(response, targetType);
+        return nilablejsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else if targetType is typedesc<map<json>> {
         json payload = check response.getJsonPayload();
         return <map<json>> payload;
     } else if targetType is typedesc<anydata> {
-        return nilablejsonPayloadBuilder(response, targetType);
+        return nilablejsonPayloadBuilder(response, targetType, requireLaxDataBinding);
     } else {
         // Consume payload to avoid memory leaks
         byte[]|ClientError payload = response.getBinaryPayload();
@@ -158,18 +159,26 @@ isolated function jsonPayloadBuilder(Response response, TargetType targetType) r
     }
 }
 
-isolated function nonNilablejsonPayloadBuilder(Response response, typedesc<anydata> targetType)
+isolated function nonNilablejsonPayloadBuilder(Response response, typedesc<anydata> targetType, boolean requireLaxDataBinding)
         returns anydata|ClientError {
     json payload = check response.getJsonPayload();
-    var result = payload.fromJsonWithType(targetType);
+    jsondata:Options jsonParserOptions = {
+        enableConstraintValidation: false,
+        allowDataProjection: requireLaxDataBinding ? {nilAsOptionalField: true, absentAsNilableType: true} : false
+    };
+    var result = jsondata:parseAsType(payload, jsonParserOptions, targetType);
     return result is error ? createPayloadBindingError(result) : result;
 }
 
-isolated function nilablejsonPayloadBuilder(Response response, typedesc<anydata> targetType)
+isolated function nilablejsonPayloadBuilder(Response response, typedesc<anydata> targetType, boolean requireLaxDataBinding)
         returns anydata|ClientError {
     json|ClientError payload = response.getJsonPayload();
+    jsondata:Options jsonParserOptions = {
+        enableConstraintValidation: false,
+        allowDataProjection: requireLaxDataBinding ? {nilAsOptionalField: true, absentAsNilableType: true} : false
+    };
     if payload is json {
-        var result = payload.fromJsonWithType(targetType);
+        var result = jsondata:parseAsType(payload, jsonParserOptions, targetType);
         return result is error ? createPayloadBindingError(result) : result;
     } else {
         return payload is NoContentError ? () : payload;
@@ -199,6 +208,6 @@ isolated function performDataValidation(anydata payload, typedesc<anydata> targe
     return payload;
 }
 
-isolated function typeIncludedInUnion(typedesc unionType, any targetType) returns boolean = @java:Method {
+isolated function matchingType(typedesc unionType, any targetType) returns boolean = @java:Method {
     'class: "io.ballerina.stdlib.http.api.service.signature.builder.AbstractPayloadBuilder"
 } external;
